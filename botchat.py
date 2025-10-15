@@ -1,23 +1,22 @@
 from flask import Flask, request
-import requests
-import os
+import requests, os
 
 app = Flask(__name__)
 
 # ====== CẤU HÌNH BOT ======
-VERIFY_TOKEN = "0916659939"   # Token để xác minh Webhook (bạn có thể đổi)
+VERIFY_TOKEN = "0916659939"   # Token để xác minh Webhook (dùng trong Facebook Developer)
 PAGE_ACCESS_TOKEN = "EAATHSZCmQwQ8BPhPGgRwoQgMhzoZAAcnbQkXZBZCtZBMtPQFCri06o50bM9XCm0A3VNpx0UzI5v0jbW1QwxddQZC7iZA8w2w3jk1lHDU0qhOQo6ZA1AgWXe7XRw5EZBNnSkhSI0U1W4H0h8LzbjZC9Jl1ak9yrXCZA1m5c7yb7i02uqAQKvLwH2Oe4tQcZB0t57Xnxg01b5MCwkxugZDZD"
 OPENROUTER_API_KEY = "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"
 # ===========================
 
 
-# ✅ Trang chủ để Render test (fix lỗi 404)
+# ✅ Trang chủ để Render kiểm tra (fix lỗi 404)
 @app.route("/", methods=["GET"])
 def home():
     return "✅ Bot Messenger đang hoạt động trên Render!", 200
 
 
-# 🧩 Xác minh Webhook khi bấm “Xác minh và lưu” trong Meta
+# 🧩 Xác minh Webhook khi bấm “Xác minh và lưu” trong Facebook Developer
 @app.route("/webhook", methods=['GET'])
 def verify():
     token = request.args.get("hub.verify_token")
@@ -27,7 +26,7 @@ def verify():
     return "Xác minh thất bại", 403
 
 
-# 💬 Nhận tin nhắn từ người dùng
+# 💬 Nhận tin nhắn từ người dùng (Facebook gửi về)
 @app.route("/webhook", methods=['POST'])
 def webhook():
     data = request.get_json()
@@ -44,7 +43,7 @@ def webhook():
     return "ok", 200
 
 
-# 🧠 Gọi API OpenRouter để sinh phản hồi AI
+# 🧠 Gọi API OpenRouter để tạo phản hồi AI
 def get_ai_reply(user_message):
     url = "https://openrouter.ai/api/v1/chat/completions"
     headers = {
@@ -84,7 +83,7 @@ def send_message(recipient_id, message_text):
     print("📤 Đã gửi phản hồi:", res.text)
 
 
-# ✅ Chạy Flask cho Render (mở cổng ngoài)
+# ✅ Chạy Flask (Render sẽ cấp PORT tự động)
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
