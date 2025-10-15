@@ -1,13 +1,20 @@
 from flask import Flask, request
 import requests
+import os
 
 app = Flask(__name__)
 
 # ====== CẤU HÌNH BOT ======
 VERIFY_TOKEN = "0916659939"   # Token để xác minh Webhook (bạn có thể đổi)
 PAGE_ACCESS_TOKEN = "EAATHSZCmQwQ8BPhPGgRwoQgMhzoZAAcnbQkXZBZCtZBMtPQFCri06o50bM9XCm0A3VNpx0UzI5v0jbW1QwxddQZC7iZA8w2w3jk1lHDU0qhOQo6ZA1AgWXe7XRw5EZBNnSkhSI0U1W4H0h8LzbjZC9Jl1ak9yrXCZA1m5c7yb7i02uqAQKvLwH2Oe4tQcZB0t57Xnxg01b5MCwkxugZDZD"
-OPENROUTER_API_KEY = "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"  # 👉 Key từ https://openrouter.ai/keys
+OPENROUTER_API_KEY = "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"
 # ===========================
+
+
+# ✅ Trang chủ để Render test (fix lỗi 404)
+@app.route("/", methods=["GET"])
+def home():
+    return "✅ Bot Messenger đang hoạt động trên Render!", 200
 
 
 # 🧩 Xác minh Webhook khi bấm “Xác minh và lưu” trong Meta
@@ -47,7 +54,7 @@ def get_ai_reply(user_message):
         "Content-Type": "application/json",
     }
     data = {
-        "model": "gpt-4o-mini",  # bạn có thể đổi model khác nếu muốn
+        "model": "gpt-4o-mini",
         "messages": [
             {"role": "system", "content": "Bạn là trợ lý AI thân thiện, nói tiếng Việt, trả lời ngắn gọn, dễ hiểu."},
             {"role": "user", "content": user_message}
@@ -76,7 +83,8 @@ def send_message(recipient_id, message_text):
     res = requests.post(url, json=payload)
     print("📤 Đã gửi phản hồi:", res.text)
 
+
+# ✅ Chạy Flask cho Render (mở cổng ngoài)
 if __name__ == "__main__":
-    import os
-    port = int(os.environ.get("PORT", 5000))  # Render sẽ tự cấp PORT (vd: 10000)
+    port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
