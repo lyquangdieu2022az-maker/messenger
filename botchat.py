@@ -76,8 +76,7 @@ def send_message(recipient_id, message_text):
     res = requests.post(url, json=payload)
     print("📤 Đã gửi phản hồi:", res.text)
 
-
 if __name__ == "__main__":
     import os
-    port = int(os.environ.get("PORT", 5000))
+    port = int(os.environ.get("PORT", 5000))  # Render sẽ tự cấp PORT (vd: 10000)
     app.run(host="0.0.0.0", port=port)
