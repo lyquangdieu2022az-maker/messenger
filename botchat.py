@@ -7,11 +7,11 @@ from gtts import gTTS
 app = Flask(__name__)
 
 # ========= CẤU HÌNH ENV (KHÔNG ĐỂ KEY TRONG CODE) =========
-VERIFY_TOKEN         = os.getenv("VERIFY_TOKEN", "")
-PAGE_ACCESS_TOKEN    = os.getenv("PAGE_ACCESS_TOKEN", "")
-OPENROUTER_API_KEY   = os.getenv("OPENROUTER_API_KEY", "")
-GOOGLE_MAPS_API_KEY  = os.getenv("GOOGLE_MAPS_API_KEY", "")
-PUBLIC_HOSTNAME      = os.getenv("PUBLIC_HOSTNAME", "")
+VERIFY_TOKEN         = os.getenv("VERIFY_TOKEN",  "0916659939")
+PAGE_ACCESS_TOKEN    = os.getenv("PAGE_ACCESS_TOKEN", "EAATHSZCmQwQ8BPqHzs2KB1D6L3KSd0sv3ZB9ZBbJkb9Eg9884jDta84hHqiFUuOZCEeKZA1eTgNjd723u3tycEafmuskplrgPuFDZBC4vRZBZCijxEMbxZCVdPlOztZB3bQrBcMwFWJf9c0KRUJIbQm7LCKpNpKEaL4e0KrooBrcfIMKZCFF6ChxsNjdDWDfQiSD459IRdMOjMwZBQZDZD")
+OPENROUTER_API_KEY   = os.getenv("OPENROUTER_API_KEY", "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")
+GOOGLE_MAPS_API_KEY  = os.getenv("GOOGLE_MAPS_API_KEY", "AIzaSyCpQ39t_RV7KPEyETVTMoGNGFIiQfpAkEU")
+PUBLIC_HOSTNAME      = os.getenv("PUBLIC_HOSTNAME", "https://messenger-2-mui1.onrender.com")
 
 os.makedirs("voices", exist_ok=True)
 
@@ -477,4 +477,5 @@ if __name__ == "__main__":
     app.run(host="0.0.0.0", port=port)
 
 # ⚠️ HẾT CODE V4 (FULL OPTIONS - ENV BASED)
+
 
