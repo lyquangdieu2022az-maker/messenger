@@ -460,7 +460,11 @@ def send_message(recipient_id: str, message_text: str, image_url: str | None = N
         log("send_message:", r.status_code, r.text[:200])
     except Exception as e:
         log("send_message EXC:", e)
+
 # ========== XỬ LÝ MẶC ĐỊNH NẾU KHÔNG RƠI VÀO NHÁNH NÀO ==========
+                # (Dòng này phải lùi vào trong same level với các nhánh if trên, nhưng để rõ ràng mình viết lại dưới đây)
+
+                # Nếu không rơi vào case nào phía trên, thì xử lý bằng AI:
                 mood = detect_mood(text)
                 reply = generate_reply(text, mood)
 
@@ -477,4 +481,3 @@ if __name__ == "__main__":
     log(f"Starting Flask on 0.0.0.0:{port} | PUBLIC_HOSTNAME={host_base()}")
     app.run(host="0.0.0.0", port=port)
 
-# ⚠️ HẾT CODE V4 (FULL OPTIONS - ENV BASED)
