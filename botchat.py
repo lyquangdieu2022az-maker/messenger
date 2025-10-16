@@ -1,21 +1,28 @@
-# ============ PHẦN 1/8 — KHỞI ĐỘNG & CẤU HÌNH CƠ BẢN (ENV) ============
+# ================= Messenger Emotion Bot V4 (AI + Voice + Vision + Maps) =================
+# - ENV-based (KHÔNG chứa key trong file)
+# - Giọng nam nhanh (gTTS)
+# - Cà khịa/mắng yêu theo cảm xúc
+# - Vision (GPT-4o) giải bài tập từ ảnh
+# - Google Maps API trả địa điểm (kiểu cà khịa mạnh)
+# - Quy tắc xưng hô ưu tiên theo cách user gọi: mày↔tao, bạn↔tôi, anh↔em, ông/chú/bác↔con/cháu
+# - Nếu không rõ cách xưng hô → C (mặc định theo mood)
 
 from flask import Flask, request, send_from_directory
 import requests, os, random, time, re
 from gtts import gTTS
 
+# ---------- APP ----------
 app = Flask(__name__)
+os.makedirs("voices", exist_ok=True)
 
-# ========= CẤU HÌNH ENV (KHÔNG ĐỂ KEY TRONG CODE) =========
+# ---------- ENV ----------
 VERIFY_TOKEN         = os.getenv("VERIFY_TOKEN", "")
 PAGE_ACCESS_TOKEN    = os.getenv("PAGE_ACCESS_TOKEN", "")
 OPENROUTER_API_KEY   = os.getenv("OPENROUTER_API_KEY", "")
 GOOGLE_MAPS_API_KEY  = os.getenv("GOOGLE_MAPS_API_KEY", "")
 PUBLIC_HOSTNAME      = os.getenv("PUBLIC_HOSTNAME", "")
 
-os.makedirs("voices", exist_ok=True)
-
-# ========== HÀM TIỆN ÍCH ==========
+# ---------- UTILS ----------
 def host_base() -> str:
     base = (PUBLIC_HOSTNAME or os.environ.get("RENDER_EXTERNAL_HOSTNAME") or "").strip()
     if base and not base.startswith("http"):
@@ -27,13 +34,14 @@ def host_base() -> str:
 def log(*args):
     print("🪵", *args, flush=True)
 
+def normalize(s: str) -> str:
+    return (s or "").strip().lower()
 
-# ========== ROUTES CƠ BẢN ==========
+# ---------- ROUTES BASIC ----------
 @app.route("/", methods=["GET"])
 def home():
     return "✅ Messenger Emotion Bot V4 (AI + Voice + Vision + Maps)", 200
 
-# Facebook Webhook Verify
 @app.route("/webhook", methods=["GET"])
 def verify():
     token = request.args.get("hub.verify_token")
@@ -41,84 +49,13 @@ def verify():
     if token and token == VERIFY_TOKEN:
         return challenge
     return "Xác minh thất bại", 403
-# ========== XỬ LÝ WEBHOOK NHẬN TIN NHẮN ==========
-@app.route("/webhook", methods=["POST"])
-def webhook():
-    data = request.get_json(silent=True, force=True)
-    log("Received webhook:", data)
 
-    if not data or data.get("object") != "page":
-        return "ok", 200
-
-    for entry in data.get("entry", []):
-        for event in entry.get("messaging", []):
-            if "message" in event:
-                sender_id  = event["sender"]["id"]
-                msg        = event["message"]
-                text       = msg.get("text", "") or ""
-                attachments= msg.get("attachments", [])
-
-                # === 1) ẢNH (VISION SOLVE) ===
-                if attachments:
-                    first = attachments[0]
-                    if first.get("type") == "image":
-                        image_url = first.get("payload", {}).get("url")
-                        if image_url:
-                            log("📷 Ảnh nhận được:", image_url)
-                            vision_reply, is_hw = solve_problem_from_image(image_url)
-                            send_message(sender_id, vision_reply)
-                            if should_send_voice(vision_reply):
-                                send_voice(sender_id, vision_reply)
-                            continue
-
-                # === 2) ĐỊA CHỈ / MAPS ===
-                if is_address_query(text):
-                    if not GOOGLE_MAPS_API_KEY:
-                        send_message(sender_id, "Thiếu GOOGLE_MAPS_API_KEY nên tao chưa tra map được 😿")
-                        continue
-
-                    q = extract_place_query(text)
-                    log("📍 Địa điểm đang hỏi:", q)
-                    place = maps_text_search(q if q else text)
-                    if not place:
-                        send_message(sender_id, "Hỏi gì mơ hồ quá 😑 ghi rõ tên địa điểm đi, ví dụ: 'Bệnh viện Chợ Rẫy ở đâu'.")
-                        continue
-
-                    reply = format_place_reply(place)
-                    send_message(sender_id, reply)
-                    if should_send_voice(reply):
-                        send_voice(sender_id, reply)
-                    continue
-
-                # === 3) Sticker / Emoji ===
-                if is_sticker_message(msg) or looks_like_emoji_only(text):
-                    reply = reply_for_sticker_or_emoji(msg, text)
-                    send_message(sender_id, reply)
-                    if should_send_voice(reply):
-                        send_voice(sender_id, reply)
-                    continue
-
-                # === 4) Chào hỏi đơn giản ===
-                if is_plain_greeting(text):
-                    reply = "Chào gì mà chào, hỏi lẹ đi tao còn bận 😆"
-                    send_message(sender_id, reply)
-                    if should_send_voice(reply):
-                        send_voice(sender_id, reply)
-                    continue
-
-                # === 5) Ai tạo / Giới thiệu ===
-                if asks_who_made(text) or asks_who_you_are(text):
-                    reply = "Tao là trợ lý của *Lý Quang Diệu*, thành viên Facebook Developers Việt Nam."
-                    send_message(sender_id, reply)
-                    if should_send_voice(reply):
-                        send_voice(sender_id, reply)
-                    continue
-# ========== NHẬN DIỆN & PHẢN HỒI CƠ BẢN ==========
-
-# Phục vụ file voice
+# ---------- SERVE VOICE ----------
 @app.route("/voices/<path:filename>", methods=["GET"])
 def serve_voice(filename):
     return send_from_directory("voices", filename, as_attachment=False)
+
+# ============================== NLP RULES ==============================
 
 GREETINGS = {"hi", "hello", "chào", "alo", "hí", "helo", "hế lô", "yo", "hii", "ê"}
 
@@ -129,9 +66,6 @@ ADDRESS_TRIGGERS = [
     "ở đâu", "địa chỉ", "map", "bản đồ", "chỉ đường", "tới đâu", "đi tới", "gần nhất",
     "đường nào", "định vị", "location", "address", "where"
 ]
-
-def normalize(s: str) -> str:
-    return (s or "").strip().lower()
 
 def is_plain_greeting(text: str) -> bool:
     return normalize(text) in GREETINGS
@@ -165,17 +99,50 @@ def looks_like_emoji_only(text: str) -> bool:
         return False
 
 def is_sticker_message(msg: dict) -> bool:
-        for a in msg.get("attachments", []):
-            if a.get("type") == "image" and a.get("payload", {}).get("sticker_id"):
-                return True
-        return bool(msg.get("sticker_id"))
+    for a in msg.get("attachments", []):
+        if a.get("type") == "image" and a.get("payload", {}).get("sticker_id"):
+            return True
+    return bool(msg.get("sticker_id"))
 
 def reply_for_sticker_or_emoji(msg: dict, text: str) -> str:
     return random.choice([
         "Cười gì mà cười 😏", "Vỗ tay cho tao à 😎", "Gửi icon chi dzị 🤨",
         "Được lắm, icon chất 😆", "Thả sticker dữ ha 🤭"
     ])
-# ========== PHÂN TÍCH CẢM XÚC ==========
+
+def mentions_image(text: str) -> bool:
+    t = normalize(text)
+    return any(k in t for k in ["ảnh", "hình", "photo", "image", "picture", "gửi hình"])
+
+# ---------- Pronoun override theo cách user gọi ----------
+def detect_addressing(text: str):
+    """
+    Trả về (bot_pronoun, user_pronoun) nếu phát hiện được xưng hô.
+    Ưu tiên:
+      - user dùng 'mày' → bot 'tao', user 'mày'
+      - user dùng 'bạn' → bot 'tôi', user 'bạn'
+      - user gọi 'anh'  → bot 'em',  user 'anh'
+      - user gọi 'ông/chú/bác' → bot 'con' (hoặc 'cháu'), user giữ nguyên
+    Không phát hiện → trả về None
+    """
+    t = f" {normalize(text)} "
+    # “mày” / “mầy”
+    if " mày " in t or " mầy " in t or " mi " in t:
+        return ("tao", "mày")
+    # “bạn”
+    if " bạn " in t or t.endswith(" bạn") or t.startswith("bạn "):
+        return ("tôi", "bạn")
+    # “anh”
+    if " anh " in t or t.startswith("anh "):
+        return ("em", "anh")
+    # “ông/chú/bác”
+    for elder in ["ông", "chú", "bác"]:
+        if f" {elder} " in t or t.startswith(elder + " "):
+            return ("con", elder)
+    return None
+
+# ============================== AI TEXT ==============================
+
 def detect_mood(text: str) -> str:
     t = normalize(text)
     if any(w in t for w in INSULT_WORDS):
@@ -189,6 +156,7 @@ def detect_mood(text: str) -> str:
     return "playful"
 
 def choose_pronouns(mood: str):
+    # Mặc định theo mood (áp dụng khi KHÔNG phát hiện xưng hô rõ)
     bot = {
         "insult": ["tao", "tui"],
         "sad":    ["em", "tui"],
@@ -205,9 +173,13 @@ def choose_pronouns(mood: str):
     }.get(mood, ["bạn"])
     return random.choice(bot), random.choice(user)
 
-# ========== AI TRẢ LỜI TEXT (OpenRouter GPT) ==========
 def generate_reply(user_text: str, mood: str) -> str:
-    bp, ut = choose_pronouns(mood)
+    # Ưu tiên override theo cách user gọi
+    override = detect_addressing(user_text)
+    if override:
+        bp, ut = override
+    else:
+        bp, ut = choose_pronouns(mood)
 
     if not OPENROUTER_API_KEY:
         if mood == "insult":
@@ -218,8 +190,8 @@ def generate_reply(user_text: str, mood: str) -> str:
 
     style = {
         "insult":   f"mắng yêu nhưng không tục; xưng '{bp}', gọi '{ut}'; gắt mà vui 😤",
-        "sad":      f"vỗ về nhẹ nhàng; xưng '{bp}', gọi '{ut}'; có emoji 🥺",
-        "polite":   f"trả lời lịch sự, tôn trọng; xưng '{bp}', gọi '{ut}' 🤝",
+        "sad":      f"vỗ về nhẹ nhàng; xưng '{bp}', gọi '{ut}' 🥺",
+        "polite":   f"lịch sự, tôn trọng; xưng '{bp}', gọi '{ut}' 🤝",
         "friendly": f"vui vẻ thân mật; xưng '{bp}', gọi '{ut}' 😆",
         "playful":  f"cà khịa nhẹ; xưng '{bp}', gọi '{ut}' 😏"
     }.get(mood, "thân thiện ngắn gọn")
@@ -240,23 +212,22 @@ def generate_reply(user_text: str, mood: str) -> str:
         "temperature": 0.7,
         "max_tokens": 200
     }
-
     headers = {
         "Authorization": f"Bearer {OPENROUTER_API_KEY}",
         "Content-Type": "application/json",
         "HTTP-Referer": "https://openrouter.ai",
         "X-Title": "Messenger Emotion Bot V4"
     }
-
     try:
         r = requests.post("https://openrouter.ai/api/v1/chat/completions", json=payload, headers=headers, timeout=20)
         if r.status_code == 200:
             return r.json()["choices"][0]["message"]["content"].strip()
         else:
             return f"{bp} bận tí, {ut} hỏi lại sau 😅"
-    except:
+    except Exception:
         return f"{bp} lỗi nhẹ rồi, {ut} đợi xíu nghen 🥲"
-# ========== VISION: GIẢI BÀI TỪ ẢNH (GPT-4o Vision Full) ==========
+
+# ============================== VISION (GPT-4o) ==============================
 
 HOMEWORK_KEYWORDS = [
     "giải phương trình", "tính", "chứng minh", "rút gọn", "đạo hàm", "tích phân", "lim", "giới hạn",
@@ -264,7 +235,6 @@ HOMEWORK_KEYWORDS = [
     "hoá học", "phương trình hoá học", "phân tử", "mol", "nồng độ",
     "dịch", "ngữ pháp", "viết lại câu", "chọn đáp án đúng", "điền vào chỗ trống"
 ]
-
 MATH_TOKENS = r"[0-9\=\+\-\×\*\/\^√∑∫π≈≤≥<>:\(\)]"
 
 def is_likely_homework(text: str) -> bool:
@@ -321,7 +291,6 @@ def solve_problem_from_image(image_url: str) -> tuple[str, bool]:
         max_tokens=400
     )
     log("Vision describe:", (describe or "")[:200])
-
     hw = is_likely_homework(describe)
 
     if hw:
@@ -345,7 +314,8 @@ def solve_problem_from_image(image_url: str) -> tuple[str, bool]:
         desc = describe if describe and "Vision" not in describe else "Ảnh này có vẻ không phải bài tập."
         reply = f"{random.choice(fun_lines)}\n\nTao thấy nè:\n{desc}"
         return (reply, False)
-# ========== GOOGLE MAPS SEARCH & REPLY (CÀ KHỊA MẠNH) ==========
+
+# ============================== GOOGLE MAPS ==============================
 
 def maps_text_search(query: str) -> dict | None:
     if not GOOGLE_MAPS_API_KEY:
@@ -377,11 +347,12 @@ def format_place_reply(place: dict) -> str:
     addr = place.get("formatted_address", "Không rõ địa chỉ")
     rating = place.get("rating")
     link = maps_link_from_place(place)
-
     head = "Muốn gặp tao hả? 😏"  # Kiểu 2 cà khịa mạnh
     rate = f" · ⭐ {rating}/5" if rating else ""
     return f"{head}\n{name}{rate}\n📍 {addr}\n👉 Chui vô đây rồi tự mò tới nha: {link}"
-# ========== IMAGE PICKER (Cho các câu kiểu "gửi hình đi") ==========
+
+# ============================== IMAGE PICKER & VOICE ==============================
+
 def pick_fun_image() -> str:
     return random.choice([
         "https://source.unsplash.com/random/800x500?smile",
@@ -391,7 +362,6 @@ def pick_fun_image() -> str:
         "https://source.unsplash.com/random/800x500?cat"
     ])
 
-# ========== VOICE (gTTS - GIỌNG NAM NHANH) ==========
 def create_voice_file(text: str) -> str | None:
     ts = int(time.time() * 1000)
     filename = f"voices/voice_{ts}.mp3"
@@ -408,18 +378,14 @@ def send_voice(recipient_id: str, text: str):
     fname = create_voice_file(text)
     if not fname:
         return
-
     base = host_base()
     if not base:
         log("⚠️ Chưa thiết lập PUBLIC_HOSTNAME")
         return
-
     voice_url = f"{base}/voices/{os.path.basename(fname)}"
     payload = {
         "recipient": {"id": recipient_id},
-        "message": {
-            "attachment": {"type": "audio", "payload": {"url": voice_url}}
-        }
+        "message": {"attachment": {"type": "audio", "payload": {"url": voice_url}}}
     }
     fb_url = f"https://graph.facebook.com/v18.0/me/messages?access_token={PAGE_ACCESS_TOKEN}"
     try:
@@ -431,7 +397,8 @@ def send_voice(recipient_id: str, text: str):
 def should_send_voice(reply_text: str) -> bool:
     return any(k in reply_text for k in ["😆", "🥺", "😤", "😏", "❤️", "😂", "😅"]) or len(reply_text) >= 20
 
-# ========== GỬI TIN NHẮN ==========
+# ============================== SENDER ==============================
+
 def send_message(recipient_id: str, message_text: str, image_url: str | None = None):
     fb_url = f"https://graph.facebook.com/v18.0/me/messages?access_token={PAGE_ACCESS_TOKEN}"
 
@@ -439,10 +406,7 @@ def send_message(recipient_id: str, message_text: str, image_url: str | None = N
         img_payload = {
             "recipient": {"id": recipient_id},
             "message": {
-                "attachment": {
-                    "type": "image",
-                    "payload": {"url": image_url, "is_reusable": True}
-                }
+                "attachment": {"type": "image", "payload": {"url": image_url, "is_reusable": True}}
             }
         }
         try:
@@ -461,21 +425,94 @@ def send_message(recipient_id: str, message_text: str, image_url: str | None = N
     except Exception as e:
         log("send_message EXC:", e)
 
-# ========== XỬ LÝ MẶC ĐỊNH NẾU KHÔNG RƠI VÀO NHÁNH NÀO ==========
-                # (Dòng này phải lùi vào trong same level với các nhánh if trên, nhưng để rõ ràng mình viết lại dưới đây)
+# ============================== WEBHOOK (POST) ==============================
 
-                # Nếu không rơi vào case nào phía trên, thì xử lý bằng AI:
+@app.route("/webhook", methods=["POST"])
+def webhook():
+    data = request.get_json(silent=True, force=True)
+    log("Received webhook:", data)
+
+    if not data or data.get("object") != "page":
+        return "ok", 200
+
+    for entry in data.get("entry", []):
+        for event in entry.get("messaging", []):
+            if "message" in event:
+                sender_id  = event["sender"]["id"]
+                msg        = event["message"]
+                text       = msg.get("text", "") or ""
+                attachments= msg.get("attachments", [])
+
+                # 1) Ảnh → Vision
+                if attachments:
+                    first = attachments[0]
+                    if first.get("type") == "image":
+                        image_url = first.get("payload", {}).get("url")
+                        if image_url:
+                            log("📷 Ảnh nhận được:", image_url)
+                            vision_reply, is_hw = solve_problem_from_image(image_url)
+                            send_message(sender_id, vision_reply)
+                            if should_send_voice(vision_reply):
+                                send_voice(sender_id, vision_reply)
+                            continue
+
+                # 2) Địa chỉ / Maps
+                if is_address_query(text):
+                    if not GOOGLE_MAPS_API_KEY:
+                        send_message(sender_id, "Thiếu GOOGLE_MAPS_API_KEY nên tao chưa tra map được 😿")
+                        continue
+                    q = extract_place_query(text)
+                    log("📍 Địa điểm đang hỏi:", q)
+                    place = maps_text_search(q if q else text)
+                    if not place:
+                        send_message(sender_id, "Hỏi gì mơ hồ quá 😑 ghi rõ tên địa điểm đi, ví dụ: 'Bệnh viện Chợ Rẫy ở đâu'.")
+                        continue
+                    reply = format_place_reply(place)
+                    send_message(sender_id, reply)
+                    if should_send_voice(reply):
+                        send_voice(sender_id, reply)
+                    continue
+
+                # 3) Sticker / Emoji
+                if is_sticker_message(msg) or looks_like_emoji_only(text):
+                    reply = reply_for_sticker_or_emoji(msg, text)
+                    send_message(sender_id, reply)
+                    if should_send_voice(reply):
+                        send_voice(sender_id, reply)
+                    continue
+
+                # 4) Greeting
+                if is_plain_greeting(text):
+                    reply = "Chào gì mà chào, hỏi lẹ đi tao còn bận 😆"
+                    send_message(sender_id, reply)
+                    if should_send_voice(reply):
+                        send_voice(sender_id, reply)
+                    continue
+
+                # 5) Ai tạo / Giới thiệu
+                if asks_who_made(text) or asks_who_you_are(text):
+                    reply = "Tao là trợ lý của *Lý Quang Diệu*, thành viên Facebook Developers Việt Nam."
+                    send_message(sender_id, reply)
+                    if should_send_voice(reply):
+                        send_voice(sender_id, reply)
+                    continue
+
+                # 6) Người dùng muốn ảnh ngẫu nhiên
+                if mentions_image(text):
+                    send_message(sender_id, "Cho mày tấm hình nè 😎", image_url=pick_fun_image())
+                    continue
+
+                # 7) Mặc định → AI text
                 mood = detect_mood(text)
                 reply = generate_reply(text, mood)
-
                 send_message(sender_id, reply)
                 if should_send_voice(reply):
                     send_voice(sender_id, reply)
 
     return "ok", 200
 
+# ============================== RUN ==============================
 
-# ========== CHẠY APP ==========
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     log(f"Starting Flask on 0.0.0.0:{port} | PUBLIC_HOSTNAME={host_base()}")
