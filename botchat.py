@@ -7,11 +7,11 @@ from gtts import gTTS
 app = Flask(__name__)
 
 # ========= CẤU HÌNH ENV (KHÔNG ĐỂ KEY TRONG CODE) =========
-VERIFY_TOKEN         = os.getenv("VERIFY_TOKEN",  "0916659939")
-PAGE_ACCESS_TOKEN    = os.getenv("PAGE_ACCESS_TOKEN", "EAATHSZCmQwQ8BPqHzs2KB1D6L3KSd0sv3ZB9ZBbJkb9Eg9884jDta84hHqiFUuOZCEeKZA1eTgNjd723u3tycEafmuskplrgPuFDZBC4vRZBZCijxEMbxZCVdPlOztZB3bQrBcMwFWJf9c0KRUJIbQm7LCKpNpKEaL4e0KrooBrcfIMKZCFF6ChxsNjdDWDfQiSD459IRdMOjMwZBQZDZD")
-OPENROUTER_API_KEY   = os.getenv("OPENROUTER_API_KEY", "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")
-GOOGLE_MAPS_API_KEY  = os.getenv("GOOGLE_MAPS_API_KEY", "AIzaSyCpQ39t_RV7KPEyETVTMoGNGFIiQfpAkEU")
-PUBLIC_HOSTNAME      = os.getenv("PUBLIC_HOSTNAME", "https://messenger-2-mui1.onrender.com")
+VERIFY_TOKEN         = os.getenv("VERIFY_TOKEN", "")
+PAGE_ACCESS_TOKEN    = os.getenv("PAGE_ACCESS_TOKEN", "")
+OPENROUTER_API_KEY   = os.getenv("OPENROUTER_API_KEY", "")
+GOOGLE_MAPS_API_KEY  = os.getenv("GOOGLE_MAPS_API_KEY", "")
+PUBLIC_HOSTNAME      = os.getenv("PUBLIC_HOSTNAME", "")
 
 os.makedirs("voices", exist_ok=True)
 
@@ -41,7 +41,7 @@ def verify():
     if token and token == VERIFY_TOKEN:
         return challenge
     return "Xác minh thất bại", 403
-    # ========== XỬ LÝ WEBHOOK NHẬN TIN NHẮN ==========
+# ========== XỬ LÝ WEBHOOK NHẬN TIN NHẮN ==========
 @app.route("/webhook", methods=["POST"])
 def webhook():
     data = request.get_json(silent=True, force=True)
@@ -112,7 +112,8 @@ def webhook():
                     send_message(sender_id, reply)
                     if should_send_voice(reply):
                         send_voice(sender_id, reply)
-                    continue# ========== NHẬN DIỆN & PHẢN HỒI CƠ BẢN ==========
+                    continue
+# ========== NHẬN DIỆN & PHẢN HỒI CƠ BẢN ==========
 
 # Phục vụ file voice
 @app.route("/voices/<path:filename>", methods=["GET"])
@@ -174,7 +175,7 @@ def reply_for_sticker_or_emoji(msg: dict, text: str) -> str:
         "Cười gì mà cười 😏", "Vỗ tay cho tao à 😎", "Gửi icon chi dzị 🤨",
         "Được lắm, icon chất 😆", "Thả sticker dữ ha 🤭"
     ])
-    # ========== PHÂN TÍCH CẢM XÚC ==========
+# ========== PHÂN TÍCH CẢM XÚC ==========
 def detect_mood(text: str) -> str:
     t = normalize(text)
     if any(w in t for w in INSULT_WORDS):
@@ -255,7 +256,7 @@ def generate_reply(user_text: str, mood: str) -> str:
             return f"{bp} bận tí, {ut} hỏi lại sau 😅"
     except:
         return f"{bp} lỗi nhẹ rồi, {ut} đợi xíu nghen 🥲"
-        # ========== VISION: GIẢI BÀI TỪ ẢNH (GPT-4o Vision Full) ==========
+# ========== VISION: GIẢI BÀI TỪ ẢNH (GPT-4o Vision Full) ==========
 
 HOMEWORK_KEYWORDS = [
     "giải phương trình", "tính", "chứng minh", "rút gọn", "đạo hàm", "tích phân", "lim", "giới hạn",
@@ -264,7 +265,7 @@ HOMEWORK_KEYWORDS = [
     "dịch", "ngữ pháp", "viết lại câu", "chọn đáp án đúng", "điền vào chỗ trống"
 ]
 
-MATH_TOKENS = r"[0-9\=\+\-\×\*\/\^√∑∫π≈≤≥<>:$begin:math:text$$end:math:text$]"
+MATH_TOKENS = r"[0-9\=\+\-\×\*\/\^√∑∫π≈≤≥<>:\(\)]"
 
 def is_likely_homework(text: str) -> bool:
     t = (text or "").lower()
@@ -344,7 +345,7 @@ def solve_problem_from_image(image_url: str) -> tuple[str, bool]:
         desc = describe if describe and "Vision" not in describe else "Ảnh này có vẻ không phải bài tập."
         reply = f"{random.choice(fun_lines)}\n\nTao thấy nè:\n{desc}"
         return (reply, False)
-        # ========== GOOGLE MAPS SEARCH & REPLY (CÀ KHỊA MẠNH) ==========
+# ========== GOOGLE MAPS SEARCH & REPLY (CÀ KHỊA MẠNH) ==========
 
 def maps_text_search(query: str) -> dict | None:
     if not GOOGLE_MAPS_API_KEY:
@@ -380,7 +381,7 @@ def format_place_reply(place: dict) -> str:
     head = "Muốn gặp tao hả? 😏"  # Kiểu 2 cà khịa mạnh
     rate = f" · ⭐ {rating}/5" if rating else ""
     return f"{head}\n{name}{rate}\n📍 {addr}\n👉 Chui vô đây rồi tự mò tới nha: {link}"
-    # ========== IMAGE PICKER (Cho các câu kiểu "gửi hình đi") ==========
+# ========== IMAGE PICKER (Cho các câu kiểu "gửi hình đi") ==========
 def pick_fun_image() -> str:
     return random.choice([
         "https://source.unsplash.com/random/800x500?smile",
@@ -459,7 +460,7 @@ def send_message(recipient_id: str, message_text: str, image_url: str | None = N
         log("send_message:", r.status_code, r.text[:200])
     except Exception as e:
         log("send_message EXC:", e)
-        # ========== XỬ LÝ MẶC ĐỊNH NẾU KHÔNG RƠI VÀO NHÁNH NÀO ==========
+# ========== XỬ LÝ MẶC ĐỊNH NẾU KHÔNG RƠI VÀO NHÁNH NÀO ==========
                 mood = detect_mood(text)
                 reply = generate_reply(text, mood)
 
@@ -477,5 +478,3 @@ if __name__ == "__main__":
     app.run(host="0.0.0.0", port=port)
 
 # ⚠️ HẾT CODE V4 (FULL OPTIONS - ENV BASED)
-
-
